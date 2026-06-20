@@ -16,6 +16,8 @@ jobs:
     name: Build and Deploy Job
     steps:
       - uses: actions/checkout@v3
+        env:
+          NEXT_PUBLIC_AZURE_MAPS_KEY: ${{ secrets.NEXT_PUBLIC_AZURE_MAPS_KEY }}
         with:
           submodules: true
           lfs: false
