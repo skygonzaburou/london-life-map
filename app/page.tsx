@@ -1,92 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useState } from "react";
 
-const AzureMap = dynamic(() => import("../src/components/AzureMap"), {
+const AzureMap = dynamic(() => import("@/src/components/AzureMap"), {
   ssr: false,
 });
 
-type ClientPrincipal = {
-  identityProvider: string;
-  userId: string;
-  userDetails: string;
-  userRoles: string[];
-};
-
-type AuthMeResponse = {
-  clientPrincipal: ClientPrincipal | null;
-};
+type AppTab = "rent-map" | "restaurants";
 
 export default function Home() {
-  const [user, setUser] = useState<ClientPrincipal | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const response = await fetch("/.auth/me");
-        const data: AuthMeResponse = await response.json();
-        setUser(data.clientPrincipal);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadUser();
-  }, []);
-
-  if (isLoading) {
-    return (
-      <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-        <p>Loading...</p>
-      </main>
-    );
-  }
+  const [activeTab, setActiveTab] = useState<AppTab>("rent-map");
 
   return (
-    <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1>London Life App</h1>
-
-        {user ? (
-          <>
-            <p>You are signed in.</p>
-
-            <p>
-              <strong>User:</strong> {user.userDetails}
+    <main className="app-page">
+      <div className="app-shell">
+        <header className="app-header">
+          <div>
+            <h1 className="app-title">London Life App</h1>
+            <p className="app-subtitle">
+              Tools to support life and area selection in London.
             </p>
+          </div>
 
-            <p>
-              <strong>Provider:</strong> {user.identityProvider}
-            </p>
+          <a className="logout-button" href="/logout">
+            Log out
+          </a>
+        </header>
 
-            <p>
-              <strong>Roles:</strong> {user.userRoles.join(", ")}
-            </p>
+        <nav className="tab-bar" aria-label="Application tabs">
+          <button
+            type="button"
+            className={`tab-button ${activeTab === "rent-map" ? "active" : ""}`}
+            onClick={() => setActiveTab("rent-map")}
+          >
+            Rent Map
+          </button>
 
-            <a href="/logout">Logout</a>
-          </>
-        ) : (
-          <>
-            <p>You are not signed in.</p>
-            <a href="/login">Login</a>
-          </>
-        )}
-      </header>
+          <button
+            type="button"
+            className="tab-button"
+            disabled
+            title="Coming soon"
+          >
+            Recommended Restaurants
+          </button>
+        </nav>
 
-      {user && (
-        <section>
-          <h2>London borough map</h2>
-          <AzureMap />
-
-          <p style={{ fontSize: "0.8rem", marginTop: "0.75rem" }}>
-            Source: Office for National Statistics licensed under the Open
-            Government Licence v3.0. Contains OS data © Crown copyright and
-            database right 2025.
-          </p>
-        </section>
-      )}
+        {activeTab === "rent-map" && <AzureMap />}
+      </div>
     </main>
   );
 }

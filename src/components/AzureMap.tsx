@@ -536,55 +536,17 @@ export default function AzureMap() {
   }, [isMapReady, boroughGeoJson, rentData, selectedPeriod]);
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "280px 380px minmax(0, 1fr)",
-        gap: "1rem",
-        height: "75vh",
-        alignItems: "stretch",
-      }}
-    >
-      {/* Left column: Rent period + Rent range */}
-      <aside
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-          minHeight: 0,
-        }}
-      >
-        <section
-          style={{
-            padding: "1rem",
-            border: "1px solid #e5e7eb",
-            borderRadius: "12px",
-            background: "#ffffff",
-            color: "#111827",
-          }}
-        >
-          <h3
-            style={{
-              margin: "0 0 0.75rem",
-              fontSize: "1rem",
-            }}
-          >
-            Rent period
-          </h3>
+    <div className="rent-map-feature">
+      <div className="rent-period-bar">
+        <div className="rent-period-control">
+          <label htmlFor="rent-period">Rent period</label>
   
           <select
             id="rent-period"
+            className="form-select"
             value={selectedPeriod}
             onChange={(event) => setSelectedPeriod(event.target.value)}
             disabled={!rentData}
-            style={{
-              width: "100%",
-              padding: "0.5rem 0.6rem",
-              borderRadius: "8px",
-              border: "1px solid #d1d5db",
-              background: "#ffffff",
-              color: "#111827",
-            }}
           >
             {(rentData?.availablePeriods ?? [])
               .slice()
@@ -595,33 +557,18 @@ export default function AzureMap() {
                 </option>
               ))}
           </select>
+        </div>
   
-          <p
-            style={{
-              margin: "0.75rem 0 0",
-              fontSize: "0.85rem",
-              color: "#4b5563",
-            }}
-          >
-            Areas with rent data:{" "}
-            <strong style={{ color: "#111827" }}>
-              {selectedPeriodRecords.length}
-            </strong>
-          </p>
-        </section>
+        <div className="rent-period-meta">
+          Areas with rent data:{" "}
+          <strong style={{ color: "var(--text)" }}>
+            {selectedPeriodRecords.length}
+          </strong>
+        </div>
+      </div>
   
-        <section
-          style={{
-            padding: "1rem",
-            border: "1px solid #e5e7eb",
-            borderRadius: "12px",
-            background: "#ffffff",
-            color: "#111827",
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-          }}
-        >
+      <div className="rent-map-layout">
+        <section className="app-card rent-range-panel">
           <h3
             style={{
               margin: "0 0 0.75rem",
@@ -631,31 +578,13 @@ export default function AzureMap() {
             Rent range
           </h3>
   
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.45rem",
-              fontSize: "0.82rem",
-            }}
-          >
+          <div className="rent-range-list">
             {RENT_BANDS.map((band) => (
-              <div
-                key={band.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
-              >
+              <div key={band.id} className="rent-range-item">
                 <span
+                  className="rent-range-color"
                   style={{
-                    width: "16px",
-                    height: "16px",
                     background: band.color,
-                    border: "1px solid #9ca3af",
-                    display: "inline-block",
-                    flexShrink: 0,
                   }}
                 />
                 <span>{band.label}</span>
@@ -663,167 +592,141 @@ export default function AzureMap() {
             ))}
           </div>
         </section>
-      </aside>
   
-      {/* Middle column: Rent trend */}
-      <section
-        style={{
-          padding: "1rem",
-          border: "1px solid #e5e7eb",
-          borderRadius: "12px",
-          background: "#ffffff",
-          color: "#111827",
-          minHeight: 0,
-          overflowY: "auto",
-        }}
-      >
-        <h3
-          style={{
-            margin: "0 0 0.75rem",
-            fontSize: "1rem",
-          }}
-        >
-          Rent trend
-        </h3>
-  
-        {!selectedAreaCode ? (
-          <p
+        <section className="app-card rent-trend-panel">
+          <h3
             style={{
-              margin: 0,
-              fontSize: "0.85rem",
-              color: "#6b7280",
-              lineHeight: 1.5,
+              margin: "0 0 0.75rem",
+              fontSize: "1rem",
             }}
           >
-            Select a borough on the map to show its rent trend here.
-          </p>
-        ) : (
-          <>
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div
-                style={{
-                  fontWeight: 700,
-                  marginBottom: "0.35rem",
-                }}
-              >
-                {selectedBoroughName || selectedAreaCode}
-              </div>
+            Rent trend
+          </h3>
   
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr",
-                  gap: "0.35rem",
-                  fontSize: "0.85rem",
-                  color: "#4b5563",
-                }}
-              >
-                <div>
-                  Selected period:{" "}
-                  <strong style={{ color: "#111827" }}>{selectedPeriod}</strong>
+          {!selectedAreaCode ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.85rem",
+                color: "var(--muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              Select a borough on the map to show its rent trend here.
+            </p>
+          ) : (
+            <>
+              <div style={{ marginBottom: "0.75rem" }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  {selectedBoroughName || selectedAreaCode}
                 </div>
   
-                <div>
-                  Rent:{" "}
-                  <strong style={{ color: "#111827" }}>
-                    {formatPounds(selectedCurrentRecord?.rentalPrice)}
-                  </strong>
-                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr",
+                    gap: "0.35rem",
+                    fontSize: "0.85rem",
+                    color: "var(--muted)",
+                  }}
+                >
+                  <div>
+                    Selected period:{" "}
+                    <strong style={{ color: "var(--text)" }}>
+                      {selectedPeriod}
+                    </strong>
+                  </div>
   
-                <div>
-                  Annual change:{" "}
-                  <strong style={{ color: "#111827" }}>
-                    {formatAnnualChange(selectedCurrentRecord?.annualChange)}
-                  </strong>
+                  <div>
+                    Rent:{" "}
+                    <strong style={{ color: "var(--text)" }}>
+                      {formatPounds(selectedCurrentRecord?.rentalPrice)}
+                    </strong>
+                  </div>
+  
+                  <div>
+                    Annual change:{" "}
+                    <strong style={{ color: "var(--text)" }}>
+                      {formatAnnualChange(selectedCurrentRecord?.annualChange)}
+                    </strong>
+                  </div>
                 </div>
               </div>
-            </div>
   
-            {selectedRentHistory.length > 0 ? (
-              <div style={{ width: "100%", height: "320px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={selectedRentHistory}
-                    margin={{
-                      top: 10,
-                      right: 10,
-                      left: 0,
-                      bottom: 0,
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="timePeriod"
-                      tick={{ fontSize: 10 }}
-                      minTickGap={28}
-                    />
-                    <YAxis
-                      width={52}
-                      tick={{ fontSize: 10 }}
-                      tickFormatter={(value) =>
-                        `£${Number(value).toLocaleString("en-GB")}`
-                      }
-                    />
-                    <Tooltip content={<RentTrendTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="rentalPrice"
-                      name="Rent"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.85rem",
-                  color: "#6b7280",
-                  lineHeight: 1.5,
-                }}
-              >
-                No rent trend data is available for this area.
-              </p>
-            )}
-          </>
-        )}
-      </section>
+              {selectedRentHistory.length > 0 ? (
+                <div style={{ width: "100%", height: "320px" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={selectedRentHistory}
+                      margin={{
+                        top: 10,
+                        right: 10,
+                        left: 0,
+                        bottom: 0,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="timePeriod"
+                        tick={{ fontSize: 10 }}
+                        minTickGap={28}
+                      />
+                      <YAxis
+                        width={52}
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(value) =>
+                          `£${Number(value).toLocaleString("en-GB")}`
+                        }
+                      />
+                      <Tooltip content={<RentTrendTooltip />} />
+                      <Line
+                        type="monotone"
+                        dataKey="rentalPrice"
+                        name="Rent"
+                        stroke="#60a5fa"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.85rem",
+                    color: "var(--muted)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  No rent trend data is available for this area.
+                </p>
+              )}
+            </>
+          )}
+        </section>
   
-      {/* Right column: Map */}
-      <section
-        style={{
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {errorMessage && (
-          <p
-            style={{
-              color: "#b91c1c",
-              fontWeight: 600,
-              marginTop: 0,
-            }}
-          >
-            {errorMessage}
-          </p>
-        )}
+        <section className="map-panel">
+          {errorMessage && (
+            <p
+              style={{
+                color: "var(--danger)",
+                fontWeight: 600,
+                marginTop: 0,
+              }}
+            >
+              {errorMessage}
+            </p>
+          )}
   
-        <div
-          ref={mapContainerRef}
-          style={{
-            width: "100%",
-            height: "100%",
-            minHeight: 0,
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            overflow: "hidden",
-          }}
-        />
-      </section>
+          <div ref={mapContainerRef} className="map-container" />
+        </section>
+      </div>
     </div>
   );
 }
