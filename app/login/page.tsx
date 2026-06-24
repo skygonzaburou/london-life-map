@@ -5,7 +5,7 @@ export default function LoginPage() {
         <h1 className="login-title">London Life App</h1>
 
         <p className="login-description">
-          Sign in to access London living support tools for Dentsu Soken UK.
+          Sign in to access London living support tools.
         </p>
 
         <a
