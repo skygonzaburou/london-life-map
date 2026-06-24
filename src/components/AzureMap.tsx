@@ -2,6 +2,15 @@
 
 import * as atlas from "azure-maps-control";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 type BoroughFeature = {
   type: "Feature";
@@ -31,6 +40,98 @@ type RentData = {
   availablePeriods: string[];
   records: RentRecord[];
 };
+
+type RentTrendPoint = {
+  timePeriod: string;
+  rentalPrice: number;
+};
+
+type RentTrendTooltipProps = {
+  active?: boolean;
+  payload?: {
+    value?: number | string;
+  }[];
+  label?: string;
+};
+
+function formatPounds(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "No data";
+  }
+
+  return `£${value.toLocaleString("en-GB")}`;
+}
+
+function formatAnnualChange(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "No data";
+  }
+
+  return `${value.toFixed(1)}%`;
+}
+
+function RentTrendTooltip({
+  active,
+  payload,
+  label,
+}: RentTrendTooltipProps) {
+  if (!active || !payload || payload.length === 0) {
+    return null;
+  }
+
+  const rawValue = payload[0]?.value;
+  const value =
+    typeof rawValue === "number" ? rawValue : Number(rawValue ?? NaN);
+
+  return (
+    <div
+      style={{
+        padding: "0.6rem 0.75rem",
+        background: "#ffffff",
+        border: "1px solid #d1d5db",
+        borderRadius: "8px",
+        color: "#111827",
+        fontSize: "0.85rem",
+      }}
+    >
+      <div style={{ color: "#6b7280", marginBottom: "0.25rem" }}>
+        {label}
+      </div>
+      <strong>{Number.isFinite(value) ? formatPounds(value) : "No data"}</strong>
+    </div>
+  );
+}
+
+function getShapeProperties(shape: unknown): Record<string, unknown> {
+  if (!shape || typeof shape !== "object") {
+    return {};
+  }
+
+  const possibleShape = shape as {
+    getProperties?: () => unknown;
+    properties?: unknown;
+  };
+
+  const propertiesFromMethod = possibleShape.getProperties?.();
+
+  if (
+    propertiesFromMethod &&
+    typeof propertiesFromMethod === "object" &&
+    !Array.isArray(propertiesFromMethod)
+  ) {
+    return propertiesFromMethod as Record<string, unknown>;
+  }
+
+  if (
+    possibleShape.properties &&
+    typeof possibleShape.properties === "object" &&
+    !Array.isArray(possibleShape.properties)
+  ) {
+    return possibleShape.properties as Record<string, unknown>;
+  }
+
+  return {};
+}
 
 type RentBand = {
   id: string;
@@ -231,6 +332,7 @@ export default function AzureMap() {
     useState<BoroughFeatureCollection | null>(null);
   const [rentData, setRentData] = useState<RentData | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string>("");
+  const [selectedAreaCode, setSelectedAreaCode] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const selectedPeriodRecords = useMemo(() => {
@@ -242,6 +344,55 @@ export default function AzureMap() {
       (record) => record.timePeriod === selectedPeriod
     );
   }, [rentData, selectedPeriod]);
+
+  const selectedCurrentRecord = useMemo(() => {
+    if (!selectedAreaCode || !selectedPeriod) {
+      return null;
+    }
+  
+    return (
+      selectedPeriodRecords.find(
+        (record) => record.areaCode === selectedAreaCode
+      ) ?? null
+    );
+  }, [selectedAreaCode, selectedPeriod, selectedPeriodRecords]);
+  
+  const selectedBoroughName = useMemo(() => {
+    if (!selectedAreaCode) {
+      return "";
+    }
+  
+    const feature = boroughGeoJson?.features.find((feature) => {
+      return getBoroughAreaCode(feature.properties ?? {}) === selectedAreaCode;
+    });
+  
+    const fallbackRentRecord = rentData?.records.find(
+      (record) => record.areaCode === selectedAreaCode
+    );
+  
+    return getBoroughName(
+      feature?.properties ?? {},
+      selectedCurrentRecord ?? fallbackRentRecord
+    );
+  }, [boroughGeoJson, rentData, selectedAreaCode, selectedCurrentRecord]);
+  
+  const selectedRentHistory = useMemo<RentTrendPoint[]>(() => {
+    if (!rentData || !selectedAreaCode) {
+      return [];
+    }
+  
+    return rentData.records
+      .filter((record) => {
+        return (
+          record.areaCode === selectedAreaCode &&
+          record.rentalPrice !== null
+        );
+      })
+      .map((record) => ({
+        timePeriod: record.timePeriod,
+        rentalPrice: record.rentalPrice as number,
+      }));
+  }, [rentData, selectedAreaCode]);
 
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_AZURE_MAPS_KEY;
@@ -292,6 +443,27 @@ export default function AzureMap() {
       );
 
       map.layers.add([polygonLayer, lineLayer]);
+      map.events.add("click", polygonLayer, (event) => {
+        const mapEvent = event as atlas.MapMouseEvent & {
+          shapes?: unknown[];
+        };
+      
+        const shape = mapEvent.shapes?.[0];
+        const properties = getShapeProperties(shape);
+      
+        const areaCode = String(
+          properties.areaCode ??
+            properties.LAD25CD ??
+            properties.LAD24CD ??
+            properties.LAD23CD ??
+            properties.LADCD ??
+            ""
+        ).trim();
+      
+        if (areaCode) {
+          setSelectedAreaCode(areaCode);
+        }
+      });
       setIsMapReady(true);
     });
 
@@ -367,17 +539,19 @@ export default function AzureMap() {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "320px minmax(0, 1fr)",
+        gridTemplateColumns: "280px 380px minmax(0, 1fr)",
         gap: "1rem",
+        height: "75vh",
         alignItems: "stretch",
       }}
     >
+      {/* Left column: Rent period + Rent range */}
       <aside
         style={{
           display: "flex",
           flexDirection: "column",
           gap: "1rem",
-          minHeight: "75vh",
+          minHeight: 0,
         }}
       >
         <section
@@ -397,7 +571,7 @@ export default function AzureMap() {
           >
             Rent period
           </h3>
-
+  
           <select
             id="rent-period"
             value={selectedPeriod}
@@ -421,7 +595,7 @@ export default function AzureMap() {
                 </option>
               ))}
           </select>
-
+  
           <p
             style={{
               margin: "0.75rem 0 0",
@@ -435,49 +609,7 @@ export default function AzureMap() {
             </strong>
           </p>
         </section>
-
-        <section
-          style={{
-            padding: "1rem",
-            border: "1px solid #e5e7eb",
-            borderRadius: "12px",
-            background: "#ffffff",
-            color: "#111827",
-            minHeight: "180px",
-          }}
-        >
-          <h3
-            style={{
-              margin: "0 0 0.75rem",
-              fontSize: "1rem",
-            }}
-          >
-            Rent trend
-          </h3>
-
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.85rem",
-              color: "#6b7280",
-              lineHeight: 1.5,
-            }}
-          >
-            Select a borough on the map to show its rent trend here.
-          </p>
-
-          <p
-            style={{
-              margin: "0.75rem 0 0",
-              fontSize: "0.8rem",
-              color: "#9ca3af",
-              lineHeight: 1.5,
-            }}
-          >
-            This panel will be implemented in Step 14.
-          </p>
-        </section>
-
+  
         <section
           style={{
             padding: "1rem",
@@ -486,6 +618,8 @@ export default function AzureMap() {
             background: "#ffffff",
             color: "#111827",
             flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
           }}
         >
           <h3
@@ -496,7 +630,7 @@ export default function AzureMap() {
           >
             Rent range
           </h3>
-
+  
           <div
             style={{
               display: "flex",
@@ -530,24 +664,160 @@ export default function AzureMap() {
           </div>
         </section>
       </aside>
-
-      <section>
+  
+      {/* Middle column: Rent trend */}
+      <section
+        style={{
+          padding: "1rem",
+          border: "1px solid #e5e7eb",
+          borderRadius: "12px",
+          background: "#ffffff",
+          color: "#111827",
+          minHeight: 0,
+          overflowY: "auto",
+        }}
+      >
+        <h3
+          style={{
+            margin: "0 0 0.75rem",
+            fontSize: "1rem",
+          }}
+        >
+          Rent trend
+        </h3>
+  
+        {!selectedAreaCode ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.85rem",
+              color: "#6b7280",
+              lineHeight: 1.5,
+            }}
+          >
+            Select a borough on the map to show its rent trend here.
+          </p>
+        ) : (
+          <>
+            <div style={{ marginBottom: "0.75rem" }}>
+              <div
+                style={{
+                  fontWeight: 700,
+                  marginBottom: "0.35rem",
+                }}
+              >
+                {selectedBoroughName || selectedAreaCode}
+              </div>
+  
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr",
+                  gap: "0.35rem",
+                  fontSize: "0.85rem",
+                  color: "#4b5563",
+                }}
+              >
+                <div>
+                  Selected period:{" "}
+                  <strong style={{ color: "#111827" }}>{selectedPeriod}</strong>
+                </div>
+  
+                <div>
+                  Rent:{" "}
+                  <strong style={{ color: "#111827" }}>
+                    {formatPounds(selectedCurrentRecord?.rentalPrice)}
+                  </strong>
+                </div>
+  
+                <div>
+                  Annual change:{" "}
+                  <strong style={{ color: "#111827" }}>
+                    {formatAnnualChange(selectedCurrentRecord?.annualChange)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+  
+            {selectedRentHistory.length > 0 ? (
+              <div style={{ width: "100%", height: "320px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={selectedRentHistory}
+                    margin={{
+                      top: 10,
+                      right: 10,
+                      left: 0,
+                      bottom: 0,
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="timePeriod"
+                      tick={{ fontSize: 10 }}
+                      minTickGap={28}
+                    />
+                    <YAxis
+                      width={52}
+                      tick={{ fontSize: 10 }}
+                      tickFormatter={(value) =>
+                        `£${Number(value).toLocaleString("en-GB")}`
+                      }
+                    />
+                    <Tooltip content={<RentTrendTooltip />} />
+                    <Line
+                      type="monotone"
+                      dataKey="rentalPrice"
+                      name="Rent"
+                      stroke="#2563eb"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.85rem",
+                  color: "#6b7280",
+                  lineHeight: 1.5,
+                }}
+              >
+                No rent trend data is available for this area.
+              </p>
+            )}
+          </>
+        )}
+      </section>
+  
+      {/* Right column: Map */}
+      <section
+        style={{
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {errorMessage && (
           <p
             style={{
               color: "#b91c1c",
               fontWeight: 600,
+              marginTop: 0,
             }}
           >
             {errorMessage}
           </p>
         )}
-
+  
         <div
           ref={mapContainerRef}
           style={{
             width: "100%",
-            height: "75vh",
+            height: "100%",
+            minHeight: 0,
             border: "1px solid #ddd",
             borderRadius: "12px",
             overflow: "hidden",
