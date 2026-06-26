@@ -1,3 +1,355 @@
+(日本語のREADMEは下部にあります)
+# London Life App
+
+London Life App is a web application designed for people who are starting life in London.
+
+In the current MVP, the application supports residential area selection by visualising rental levels across London on a map, using ONS rent data and London borough boundary data.
+
+## Current MVP Scope
+
+The following features have been implemented in the current MVP:
+
+* Deployment to Azure Static Web Apps
+* Login requirement using Azure Static Web Apps built-in authentication
+* London map display using Azure Maps
+* Display of London borough boundary data from ONS
+* Use of ONS rent data converted into JSON
+* Rent range colouring by selected year and month
+* Rent trend chart displayed when a borough is selected
+* Tab-based UI for Rent Map and Recommended Restaurants
+* Dark theme-based UI
+* Responsive layout support
+
+The Recommended Restaurants tab is currently displayed as a placeholder for a future feature.
+
+## Technology Stack
+
+| Category       | Technology                                    |
+| -------------- | --------------------------------------------- |
+| Frontend       | Next.js / TypeScript                          |
+| Hosting        | Azure Static Web Apps                         |
+| Authentication | Azure Static Web Apps built-in authentication |
+| Map            | Azure Maps                                    |
+| Chart          | Recharts                                      |
+| Data source    | Office for National Statistics                |
+| CI/CD          | GitHub Actions                                |
+| Repository     | GitHub private repository                     |
+
+## System Architecture
+
+The following diagram shows the overall architecture, including the current MVP and the planned automated rent data update process.
+
+```mermaid
+flowchart LR
+    User[User / Browser] --> SWA[Azure Static Web Apps]
+
+    SWA --> Auth[Static Web Apps Authentication]
+    SWA --> App[Next.js Static Site]
+    App --> AzureMaps[Azure Maps]
+
+    App --> BoundaryJson[public/data/london-boroughs.geojson]
+    App --> RentJson[public/data/london-rents.json]
+
+    ONSBoundary[ONS Boundary Data] --> BoundaryScript[scripts/filter-london-boroughs.mjs]
+    BoundaryScript --> BoundaryJson
+
+    ONSRent[ONS Rent Excel] --> RentScript[scripts/convert-rent-excel.mjs]
+    RentScript --> RentJson
+
+    GitHub[GitHub Repository] --> Actions[GitHub Actions]
+    Actions --> SWA
+
+    GitHubSecrets[GitHub Actions Secrets<br/>NEXT_PUBLIC_AZURE_MAPS_KEY] --> Actions
+
+    ScheduledUpdate[Scheduled GitHub Actions<br/>planned] -.-> ONSRent
+    ScheduledUpdate -.-> RentScript
+    ScheduledUpdate -.-> RentJson
+    ScheduledUpdate -.-> GitHub
+```
+
+## CI/CD Pipeline
+
+The application deployment is triggered by pushing changes to GitHub.
+
+```mermaid
+flowchart TD
+    Dev[Developer] --> Push[git push to main]
+    Push --> GHA[GitHub Actions<br/>Azure Static Web Apps CI/CD]
+    GHA --> Install[npm install / npm ci]
+    Install --> Build[npm run build]
+    Build --> Export[Next.js static export<br/>out folder]
+    Export --> Deploy[Deploy to Azure Static Web Apps]
+    Deploy --> Site[Published Web App]
+```
+
+## Rent Data Update Flow
+
+### As-Is
+
+Currently, the ONS Excel file is downloaded manually and converted into JSON locally.
+
+```mermaid
+flowchart TD
+    Download[Download ONS rent Excel manually] --> RawExcel[data/raw/datadownload.xlsx]
+    RawExcel --> Convert[npm run convert:rent]
+    Convert --> RentJson[public/data/london-rents.json]
+    RentJson --> Commit[git commit]
+    Commit --> Push[git push]
+    Push --> Deploy[Azure Static Web Apps CI/CD]
+```
+
+### To-Be
+
+In the future, GitHub Actions will periodically download the latest ONS Excel file and automatically update the JSON rent data.
+
+```mermaid
+flowchart TD
+    Schedule[Monthly GitHub Actions<br/>planned] --> Download[Download latest ONS rent Excel]
+    Download --> Convert[npm run convert:rent]
+    Convert --> Validate[Validate generated JSON]
+    Validate --> HasChanges{london-rents.json changed?}
+    HasChanges -->|Yes| Commit[Auto commit updated JSON]
+    Commit --> Push[Push to repository]
+    Push --> Deploy[Azure Static Web Apps CI/CD]
+    HasChanges -->|No| End[No update]
+```
+
+## Data Structure
+
+### Boundary Data
+
+The London borough boundary data is generated from the ONS Local Authority District boundary data.
+
+The original dataset contains boundary data for the whole UK. For this MVP, only London-related Local Authority codes starting with `E09` are extracted.
+
+Output file:
+
+```text
+public/data/london-boroughs.geojson
+```
+
+Conversion script:
+
+```text
+scripts/filter-london-boroughs.mjs
+```
+
+This script performs the following steps:
+
+* Reads the ONS Local Authority District GeoJSON file
+* Extracts only London boroughs and the City of London
+* Converts geometry coordinates from British National Grid coordinates (EPSG:27700) to longitude / latitude coordinates (EPSG:4326), which can be used by Azure Maps
+* Outputs the result as `public/data/london-boroughs.geojson`
+
+### Rent Data
+
+The rent data is generated from the ONS `Price Index of Private Rents (PIPR), UK: monthly price statistics` Excel file.
+
+Output file:
+
+```text
+public/data/london-rents.json
+```
+
+Conversion script:
+
+```text
+scripts/convert-rent-excel.mjs
+```
+
+This script performs the following steps:
+
+* Reads the ONS Excel file
+* Automatically detects columns such as `Time period`, `Area code`, `Area name`, and `Rental price`
+* Extracts only records where the Area code starts with `E09`, which represents London boroughs
+* Converts Excel serial date values into `YYYY-MM` format
+* Converts the rent data into a JSON format that can be easily used by the application
+* Outputs `latestPeriod` and `availablePeriods`
+
+Note: Some ONS Excel files may use the 1904 date system. Therefore, the script checks the workbook settings before converting Excel serial date values.
+
+## Data Attribution
+
+This application uses processed data from the Office for National Statistics.
+
+```text
+Source: Office for National Statistics licensed under the Open Government Licence v3.0.
+Contains OS data © Crown copyright and database right 2025.
+```
+
+## Local Development
+
+### Install Dependencies
+
+```bash
+npm install
+```
+
+### Environment Variables
+
+For local development, create a `.env.local` file in the project root and set the Azure Maps key.
+
+```env
+NEXT_PUBLIC_AZURE_MAPS_KEY=your_azure_maps_key
+```
+
+The `.env.local` file is not managed by Git.
+
+### Start Development Server
+
+```bash
+npm run dev
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+## Data Conversion
+
+### Convert Rent Data to JSON
+
+Place the ONS Excel file in the following location:
+
+```text
+data/raw/datadownload.xlsx
+```
+
+Then run:
+
+```bash
+npm run convert:rent
+```
+
+Output file:
+
+```text
+public/data/london-rents.json
+```
+
+### Extract London Boundary Data
+
+Place the ONS Local Authority District boundary GeoJSON file in the following location:
+
+```text
+data/raw/local-authority-districts-dec-2025-uk-bgc.geojson
+```
+
+Then run:
+
+```bash
+node scripts/filter-london-boroughs.mjs
+```
+
+Output file:
+
+```text
+public/data/london-boroughs.geojson
+```
+
+## Authentication
+
+In the production environment, the application uses Azure Static Web Apps authentication.
+
+Configuration file:
+
+```text
+public/staticwebapp.config.json
+```
+
+Main configuration:
+
+* `/login` is accessible to anonymous users
+* `/_next/*` is allowed for anonymous users because it is required to render the login page
+* `/*` is restricted to authenticated users only
+* Unauthenticated users are redirected to `/login`
+
+During local development with `npm run dev`, Azure Static Web Apps authentication rules are not fully reproduced.
+
+In the production environment, login is required through `staticwebapp.config.json`.
+
+## Deployment
+
+This application is deployed to Azure Static Web Apps through GitHub Actions.
+
+Typical deployment flow:
+
+```text
+git push
+  → GitHub Actions
+  → npm run build
+  → Deploy to Azure Static Web Apps
+```
+
+The Azure Maps key is managed through GitHub Actions Secrets.
+
+```text
+NEXT_PUBLIC_AZURE_MAPS_KEY
+```
+
+## Main Features
+
+### Rent Map
+
+The Rent Map tab provides the following features:
+
+* Select year and month
+* Colour London boroughs by rent range for the selected period
+* Click a borough to display its rent trend chart
+* View rent price and annual change for the selected period
+
+### Recommended Restaurants
+
+This feature is not implemented yet.
+
+The tab is currently displayed as a disabled placeholder for a future feature.
+
+## Remaining Tasks
+
+### Automated Rent Data Update
+
+Currently, the ONS Excel file is downloaded manually and converted into JSON by running `npm run convert:rent`.
+
+In the future, the following process will be automated using GitHub Actions:
+
+* Periodically download the latest ONS rent Excel file
+* Temporarily save it as `data/raw/datadownload.xlsx`
+* Run `npm run convert:rent`
+* Update `public/data/london-rents.json`
+* Automatically commit the updated file only when there are data changes
+* Trigger the existing Azure Static Web Apps CI/CD pipeline and deploy the updated data
+
+Expected schedule:
+
+```text
+Around the 23rd of each month, subject to confirmation
+```
+
+The ONS rent data is updated monthly, so the automated process is expected to run shortly after the monthly release.
+
+### Validation Required for Automated Updates
+
+To prevent invalid data from being committed due to an incorrect Excel file or format changes, the automated update process should include the following checks:
+
+* `records` is not empty
+* `latestPeriod` exists
+* The latest period contains 32 London borough records
+* If JSON generation fails, no commit should be created
+
+## Out of Scope
+
+The following items are future To-Be candidates but are currently out of scope:
+
+* Employee nearest station pin registration
+* Employee recommended restaurant registration
+* Azure SQL Database integration
+* User input data persistence
+* Admin screen
+
+***
+***
 # London Life App
 
 London Life App は、ロンドンで生活を始める人向けに、Webアプリです。
